@@ -1,6 +1,9 @@
 ![ARKit + CoreLocation](https://github.com/ProjectDent/ARKit-CoreLocation/blob/master/arkit.png)
 
 <p align="center">
+    <a href="https://travis-ci.org/ProjectDent/ARKit-CoreLocation">
+        <img src="https://travis-ci.org/ProjectDent/ARKit-CoreLocation.svg?branch=develop" alt="CI Status">
+    </a>
     <a href="https://opensource.org/licenses/MIT">
         <img src="https://img.shields.io/github/license/ProjectDent/ARKit-CoreLocation.svg"
              alt="MIT License">
@@ -31,7 +34,7 @@ The improved location accuracy is currently in an “experimental” phase, but 
 
 Because there’s still work to be done there, and in other areas, this project will best be served by an open community, more than what GitHub Issues would allow us. So I’m opening up a Slack group that anyone can join, to discuss the library, improvements to it, and their own work.
 
-**[Join the Slack community](https://join.slack.com/t/arcl-dev/shared_invite/enQtNTk4OTg4MzU0MTEyLTMzYTM0Mjk0YmNkMjgwYzg4OWQ1NDFjNjc3NjM1NzdkNWNkZTc2NjQ1MWFiNmI1MTZiMTA5MmNjZmRiOTk1NjI)**
+**[Join the Slack community](https://join.slack.com/t/arcl-dev/shared_invite/enQtNTk4OTg4MzU0MTEyLTkyNGZjMDc3NDZlOGZmZTVlNWY1MWYxODg1MTA4ZWMzOThjZDM0ZmY1NGZlZjNiYmE1OGM3MDFkZTNjNjI5ODc)**
 
 ## Requirements
 ARKit requires iOS 11, and supports the following devices:
@@ -46,6 +49,17 @@ iOS 11 can be downloaded from Apple’s Developer website.
 This library contains the ARKit + CoreLocation framework, as well as a demo application similar to [Demo 1](https://twitter.com/AndrewProjDent/status/886916872683343872).
 
 [Be sure to read the section on True North calibration.](#true-north-calibration)
+
+### Building with Swift:
+
+```bash
+swift build \
+        -Xswiftc "-sdk" -Xswiftc "`xcrun --sdk iphonesimulator --show-sdk-path`" \
+        -Xswiftc "-target" -Xswiftc "x86_64-apple-ios12.1-simulator"
+```
+
+### Setting up using Swift Package Manager
+
 
 ### Setting up using CocoaPods
 1. Add to your podfile:
@@ -91,7 +105,7 @@ override func viewDidLoad() {
 
 override func viewDidLayoutSubviews() {
   super.viewDidLayoutSubviews()
-  
+
   sceneLocationView.frame = view.bounds
 }
 ```
@@ -106,7 +120,8 @@ let image = UIImage(named: "pin")!
 let annotationNode = LocationAnnotationNode(location: location, image: image)
 ```
 
-`LocationAnnotationNode` can also be initialized using a UIView. This is a preferred method since the attributes of the UIView can be kept dynamic during the lifecycle of the application.
+`LocationAnnotationNode` can also be initialized using a UIView. Internally, the UIView is converted into UIImage, so you cannot update the content dynamically.
+However, this methods allows you to easily show complex layout as POI.
 
 ```swift
 let coordinate = CLLocationCoordinate2D(latitude: 51.504571, longitude: -0.019717)
@@ -116,6 +131,15 @@ let view = UIView() // or a custom UIView subclass
 let annotationNode = LocationAnnotationNode(location: location, view: view)
 ```
 
+It can also be initialized with CALayer. You can use this when you want to update the contents live.
+
+```swift
+let coordinate = CLLocationCoordinate2D(latitude: 51.504571, longitude: -0.019717)
+let location = CLLocation(coordinate: coordinate, altitude: 300)
+let layer = CALayer() // or a custom CALayer subclass
+
+let annotationNode = LocationAnnotationNode(location: location, layer: layer)
+```
 
 By default, the image you set should always appear at the size it was given, for example if you give a 100x100 image, it would appear at 100x100 on the screen. This means distant annotation nodes can always be seen at the same size as nearby ones. If you’d rather they scale relative to their distance, you can set LocationAnnotationNode’s `scaleRelativeToDistance` to `true`.
 
@@ -127,7 +151,11 @@ There are two ways to add a location node to a scene - using `addLocationNodeWit
 
 So that’s it. If you set the frame of your sceneLocationView, you should now see the pin hovering above Canary Wharf.
 
-In order to get a notification when a node is touched in the `sceneLocationView`, you need to conform to `LNTouchDelegate` in the ViewController class. The `locationNodeTouched(node: AnnotationNode)` gives you access to node that was touched on the screen. `AnnotationNode` is a subclass of SCNNode with two extra properties: `image: UIImage?` and `view: UIView?`. Either of these properties will be filled in based on how the `LocationAnnotationNode` was initialized (using the constructor that takes UIImage or UIView).
+In order to get a notification when a node is touched in the `sceneLocationView`, you need to conform to `LNTouchDelegate` in the ViewController class. 
+
+The `annotationNodeTouched(node: AnnotationNode)` gives you access to node that was touched on the screen. `AnnotationNode` is a subclass of SCNNode with two extra properties: `image: UIImage?` and `view: UIView?`. Either of these properties will be filled in based on how the `LocationAnnotationNode` was initialized (using the constructor that takes UIImage or UIView).
+
+The `locationNodeTouched(node: LocationNode)` gives you instead access to the nodes created from a `PolyNode` (e.g. the rendered directions of a `MKRoute`).
 ```swift
 class ViewController: UIViewController, LNTouchDelegate {
 
@@ -138,9 +166,9 @@ class ViewController: UIViewController, LNTouchDelegate {
         //...
     }
 
-    func locationNodeTouched(node: AnnotationNode) {
+    func annotationNodeTouched(node: AnnotationNode) {
         // Do stuffs with the node instance
-        
+
         // node could have either node.view or node.image
         if let nodeView = node.view{
             // Do stuffs with the nodeView
@@ -151,6 +179,14 @@ class ViewController: UIViewController, LNTouchDelegate {
             // ...
         }
     }
+
+    func locationNodeTouched(node: LocationNode) {
+        guard let name = node.tag else { return }
+        guard let selectedNode = node.childNodes.first(where: { $0.geometry is SCNBox }) else { return }
+
+        // Interact with the selected node
+    }
+
 }
 ```
 ## Additional features
@@ -195,7 +231,7 @@ For example, one technique could be to look at recent location data, translate e
 
 ## Going Forward
 
-We have some Milestones and Issues related to them - anyone is welcome to discuss and contribute to them. Pull requests are welcomed. You can discuss new features/enhancements/bugs either by adding a new Issue or via [the Slack community](https://join.slack.com/t/arcl-dev/shared_invite/enQtMjgzNTcxMDE1NTA0LTZjNDI0MjA3YmFhYjFiNGY4MWY5ZThhZGYzMzcyNTFjNzQzZGVlNmYwOGQ1Y2I5NmJmYTc2MTNjMTZhZTI5ZjU).
+We have some Milestones and Issues related to them - anyone is welcome to discuss and contribute to them. Pull requests are welcomed. You can discuss new features/enhancements/bugs either by adding a new Issue or via [the Slack community](https://join.slack.com/t/arcl-dev/shared_invite/enQtNTk4OTg4MzU0MTEyLTkyNGZjMDc3NDZlOGZmZTVlNWY1MWYxODg1MTA4ZWMzOThjZDM0ZmY1NGZlZjNiYmE1OGM3MDFkZTNjNjI5ODc).
 
 ## Thanks
 Library created by [@AndrewProjDent](https://twitter.com/andrewprojdent), but a community effort from here on.
